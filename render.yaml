@@ -1,0 +1,19 @@
+# Configuração do site no Render (render.com). O Render lê este arquivo ao criar o serviço pelo "Blueprint".
+services:
+  - type: web
+    name: cronica
+    runtime: python
+    plan: free
+    region: virginia  # mesma região do banco no Neon (AWS US East 1), a mais perto do Brasil
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass  # só publica a versão nova se os testes do GitHub Actions passarem
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false

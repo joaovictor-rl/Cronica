@@ -1,0 +1,12 @@
+fastapi==0.142.2
+uvicorn[standard]==0.52.4
+SQLAlchemy==2.1.2
+psycopg[binary]==3.3.6
+python-multipart==0.0.32
+pydantic[email]==2.13.5
+PyJWT==2.14.0
+bcrypt==5.0.0
+httpx==0.28.1
+reportlab==5.0.1
+pypdfium2==5.13.0
+pillow==12.3.0
