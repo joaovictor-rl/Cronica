@@ -283,6 +283,9 @@ def figure(block: dict, load_image: Callable[[str], bytes | None], layout: Layou
     if block.get("caption"):
         caption.append(Paragraph(caption_label("figure", block.get("number", ""), layout) + markup(block["caption"]), styles.caption))
     parts = caption + images if layout.kind == "abnt" else images + caption  # na ABNT a legenda vem em cima
+    if block.get("source"):
+        label = "Source" if layout.english else "Fonte"
+        parts.append(Paragraph(f"{label}: {markup(block['source'])}", styles.note))
     return [KeepTogether(parts)] if parts else []
 
 

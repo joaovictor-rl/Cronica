@@ -62,6 +62,7 @@ export function figureHtml(block) {
   return `
     <div class="figure-images ${many ? "grid" : ""}">${images}</div>
     ${block.caption ? `<p class="caption"><b>Figura ${esc(block.number)}.</b> ${spansHtml(block.caption)}</p>` : ""}
+    ${block.source && block.source.length ? `<p class="figure-source"><b>Fonte:</b> ${spansHtml(block.source)}</p>` : ""}
   `;
 }
 

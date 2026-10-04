@@ -307,7 +307,57 @@ def figure_block(src: str) -> dict:
     outside += src[last:]
     images = [{"path": path, "caption": None} for path in graphics(outside)] + images
     caption, cap = find_caption(src, subs)
-    return {"type": "figure", "src": src, "images": images, "caption": caption, "cap": cap, "label": find_label(src, subs)}
+    source, source_at, source_line = find_source(src, subs)
+    return {"type": "figure", "src": src, "images": images, "caption": caption, "cap": cap, "label": find_label(src, subs),
+            "source": source, "source_at": source_at, "source_line": source_line}
+
+
+# A fonte da figura (a ABNT pede "Fonte:" embaixo de toda figura), escrita de um destes jeitos:
+#   \fonte{Os autores (2026)}           (abnTeX2)
+#   \legend{Fonte: Os autores (2026)}   (abnTeX2, versões antigas)
+#   \par\small Fonte: Os autores (2026)  (LaTeX comum; é o que o editor escreve)
+SOURCE_COMMAND = re.compile(r"\\(fonte|legend)\s*\{")
+SOURCE_LINE = re.compile(r"^[ \t]*(?:\\par\b\s*)?(?:\{?\\(?:small|footnotesize|scriptsize)\b\s*)?(?:Fonte|Source)\s*:\s*", re.M)
+SOURCE_PREFIX = re.compile(r"\s*(?:Fonte|Source)\s*:\s*")
+
+
+def find_source(src: str, skip: list[tuple[int, int]]):
+    """(texto da fonte, onde ele está no src, o trecho inteiro a apagar se a fonte for removida)."""
+    outside = lambda pos: not any(a <= pos < b for a, b in skip) and not is_commented(src, pos)
+    for match in SOURCE_COMMAND.finditer(src):
+        end = match_brace(src, match.end() - 1)
+        if end == -1 or not outside(match.start()):
+            continue
+        start = match.end()
+        if match.group(1) == "legend":
+            prefix = SOURCE_PREFIX.match(src, start)
+            if not prefix:
+                continue
+            start = prefix.end()
+        return strip_spans(parse_inline(src[start:end - 1])), [start, end - 1], whole_line(src, match.start(), end)
+    for match in SOURCE_LINE.finditer(src):
+        if not outside(match.start()):
+            continue
+        line_end = src.find("\n", match.end())
+        line_end = len(src) if line_end == -1 else line_end
+        stop = match.end()
+        depth = 0
+        while stop < line_end and not (src[stop] == "}" and depth == 0) and not src.startswith("\\end{", stop):
+            depth += {"{": 1, "}": -1}.get(src[stop], 0)
+            stop += 2 if src[stop] == "\\" else 1
+        end = len(src[match.end():stop].rstrip()) + match.end()
+        return strip_spans(parse_inline(src[match.end():end])), [match.end(), end], whole_line(src, match.start(), stop + (src[stop:stop + 1] == "}"))
+    return None, None, None
+
+
+def whole_line(src: str, start: int, end: int) -> list[int]:
+    """Se o trecho ocupa a linha sozinho, a linha inteira (para apagar sem deixar uma linha em branco)."""
+    line_start = src.rfind("\n", 0, start) + 1
+    line_end = src.find("\n", end)
+    line_end = len(src) if line_end == -1 else line_end
+    if src[line_start:start].strip() or src[end:line_end].strip():
+        return [start, end]
+    return [line_start, min(line_end + 1, len(src))]
 
 
 def table_block(src: str) -> dict:
@@ -398,10 +448,27 @@ def generate(block: dict) -> str:
     if kind == "abstract":
         env = block.get("env", "abstract")
         return f"\\begin{{{env}}}\n" + "\n\n".join(to_latex(p) for p in block["paragraphs"]) + f"\n\\end{{{env}}}"
-    if kind in ("figure", "table") and block.get("cap") and block.get("caption") is not None:
-        start, end = block["cap"]
-        return block["src"][:start] + to_latex(block["caption"]) + block["src"][end:]
+    if kind in ("figure", "table"):
+        return figure_or_table(block)
     return block.get("src", "")
+
+
+def figure_or_table(block: dict) -> str:
+    """Troca só a legenda e a fonte dentro do LaTeX original; o resto (tamanho da imagem etc.) fica igual."""
+    src = block["src"]
+    edits = []  # (início, fim, texto novo)
+    if block.get("cap") and block.get("caption") is not None:
+        edits.append((*block["cap"], to_latex(block["caption"])))
+    if block["type"] == "figure" and block.get("source") is not None:
+        text = to_latex(block["source"]).strip()
+        if block.get("source_at"):
+            edits.append((*block["source_at"], text) if text else (*block["source_line"], ""))
+        elif text:
+            end = src.rfind("\\end{")
+            edits.append((end, end, f"  \\par\\small Fonte: {text}\n"))
+    for start, end, text in sorted(edits, reverse=True):  # do fim para o começo, para as posições não mudarem
+        src = src[:start] + text + src[end:]
+    return src
 
 
 def serialize_block(block: dict) -> str:

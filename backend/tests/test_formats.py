@@ -1,10 +1,12 @@
 """As regras de página e de referência de cada formato (ABNT, SBC, IEEE e LaTeX comum)."""
+import io
+
 import pypdfium2 as pdfium
 import pytest
 from reportlab.lib.units import cm
 
 from app.diff.bib import parse_bib
-from app.document.blocks import parse_document
+from app.document.blocks import parse_document, serialize_document
 from app.document.pdf import layout_for
 from app.document.references import format_abnt
 from app.document.service import pdf_from_files
@@ -74,3 +76,51 @@ def test_pdf_headings_follow_the_format(template_id, expected, absent):
         assert piece in text
     for piece in absent:
         assert piece not in text
+
+
+FIGURES = {
+    "editor": "\\begin{figure}\n  \\caption{Tela}\n  \\includegraphics{a.png}\n  \\par\\small Fonte: Os autores (2026).\n\\end{figure}",
+    "abntex2": "\\begin{figure}\n\\includegraphics{a.png}\n\\caption{Tela}\n\\fonte{Os autores (2026).}\n\\end{figure}",
+    "legend": "\\begin{figure}\n\\includegraphics{a.png}\n\\legend{Fonte: Os autores (2026).}\n\\caption{Tela}\n\\end{figure}",
+}
+
+
+def figure_of(body):
+    source = "\\documentclass{article}\n\\begin{document}\n\n" + body + "\n\n\\end{document}\n"
+    doc = parse_document(source)
+    return source, doc, next(b for b in doc["blocks"] if b["type"] == "figure")
+
+
+@pytest.mark.parametrize("form", FIGURES)
+def test_figure_source_is_read_edited_and_removed(form):
+    source, doc, figure = figure_of(FIGURES[form])
+    assert figure["source"] == [{"t": "Os autores (2026)."}]
+    assert serialize_document(doc) == source  # sem editar, nada muda
+
+    figure["source"] = [{"t": "IBGE (2022)"}]
+    edited = serialize_document(doc)
+    assert "IBGE (2022)" in edited and "Os autores" not in edited
+    assert figure_of(edited.split("\n\n")[1])[2]["source"] == [{"t": "IBGE (2022)"}]
+
+    figure["source"] = []
+    removed = serialize_document(doc)
+    assert "Os autores" not in removed and "Fonte" not in removed and "\n\n\\caption" not in removed
+
+
+def test_figure_without_source_gets_one_line():
+    _, doc, figure = figure_of("\\begin{figure}\n\\includegraphics{a.png}\n\\caption{Tela}\n\\end{figure}")
+    assert figure["source"] is None
+    figure["source"] = [{"t": "Os autores"}]
+    assert "\\caption{Tela}\n  \\par\\small Fonte: Os autores\n\\end{figure}" in serialize_document(doc)
+
+
+def test_pdf_shows_figure_source_below_the_image():
+    from PIL import Image as PILImage
+    picture = io.BytesIO()
+    PILImage.new("RGB", (40, 30), "white").save(picture, "PNG")
+    tex = ("\\documentclass[12pt]{article}\n\\usepackage[alf]{abntex2cite}\n\\begin{document}\n\n"
+           + FIGURES["editor"] + "\n\n\\end{document}\n")
+    document = pdfium.PdfDocument(pdf_from_files({"main.tex": tex.encode(), "a.png": picture.getvalue()}))
+    text = document[0].get_textpage().get_text_range().replace("\r", "")
+    document.close()
+    assert text.index("Figura 1 – Tela") < text.index("Fonte: Os autores (2026).")

@@ -110,6 +110,11 @@ function headingNumbers(blocks) {
 }
 
 export class Editor {
+  // Na ABNT a legenda da figura fica em cima da imagem.
+  get abnt() {
+    return this.doc.citation_style === "abnt";
+  }
+
   constructor(root, doc, { onChange, loadImages }) {
     this.root = root;
     this.doc = structuredClone(doc);
@@ -185,9 +190,11 @@ export class Editor {
         if (block.type === "table") {
           return wrap(`<div class="paper-figure">${tableHtml(block, editable)}<p class="ed-hint">Para mudar as células da tabela, use o modo código LaTeX.</p></div>`);
         }
-        const html = figureHtml({ ...block, caption: null });
+        const html = figureHtml({ ...block, caption: null, source: null });
         const caption = block.caption ? `<p class="caption"><b>Figura ${esc(block.number || "")}.</b> ${editable ?? ""}</p>` : "";
-        return wrap(`<div class="paper-figure">${html}${caption}</div>`);
+        const source = `<p class="figure-source"><b>Fonte:</b> <span contenteditable="true" data-path="${path}.source"
+          data-placeholder="de onde veio a imagem, por exemplo: elaborado pelos autores (2026)">${editableHtml(block.source || [])}</span></p>`;
+        return wrap(`<div class="paper-figure">${this.abnt ? caption + html : html + caption}${source}</div>`);
       }
       case "raw":
         return wrap(`<details class="ed-raw"><summary>Trecho em LaTeX (avançado)</summary>
@@ -212,6 +219,7 @@ export class Editor {
       const block = this.doc.blocks[Number(a)];
       if (b === "src") block.src = element.value;
       else if (b === "cap") block.caption = readSpans(element);
+      else if (b === "source") block.source = readSpans(element);
       else if (b === "p") block.paragraphs[Number(c)] = readSpans(element);
       else if (b === "i") block.items[Number(c)].spans = readSpans(element);
       else block.spans = readSpans(element);
@@ -391,12 +399,15 @@ export class Editor {
     this.sync();
     const label = "fig:" + path.replace(/^.*\//, "").replace(/\.[a-z]+$/, "");
     const placeholder = "Legenda";
-    const src = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${path}}\n  \\caption{${placeholder}}\n  \\label{${label}}\n\\end{figure}`;
+    const image = `  \\includegraphics[width=0.8\\textwidth]{${path}}\n`;
+    const captionLines = `  \\caption{${placeholder}}\n  \\label{${label}}\n`;
+    // Na ABNT a legenda vem em cima da imagem; nos outros formatos, embaixo.
+    const src = `\\begin{figure}[htbp]\n  \\centering\n${this.abnt ? captionLines + image : image + captionLines}\\end{figure}`;
     const start = src.indexOf("\\caption{") + 9;
     const at = this.current === null ? this.doc.blocks.length : this.current + 1;
     this.doc.blocks.splice(at, 0, {
       type: "figure", src, images: [{ path, caption: null }], caption: [{ t: caption }],
-      cap: [start, start + placeholder.length], label,
+      cap: [start, start + placeholder.length], label, source: [],
     });
     this.current = at;
     this.changed({ path: `b.${at}.cap` });
