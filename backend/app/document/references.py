@@ -154,39 +154,92 @@ def abnt_cite(entry: dict | None, key: str, inline: bool) -> str:
     return f"{'; '.join(w.upper().replace(' ET AL.', ' et al.') for w in who)}, {year}"
 
 
-def format_abnt(entry: dict) -> str:
-    f = {k: strip_tex(v) for k, v in entry["fields"].items()}
+def abnt_names(field: str) -> list[str]:
+    """SOBRENOME, Prenomes de cada pessoa; instituições ({Ministério da Saúde}) inteiras em maiúsculas."""
     people = []
-    for name in split_authors(entry["fields"].get("author", "")):
+    for name in split_authors(field):
         if name.startswith("{"):
             people.append(strip_tex(name).upper())
-            continue
-        first, particle, last = name_parts(name)
-        people.append(f"{last.upper()}, {first}{' ' + particle if particle else ''}".strip(", "))
-    if len(people) > 3:
-        people = [people[0] + " et al"]
-    authors = "; ".join(people) or f.get("organization", "").upper()
-    parts = [authors + ".", f.get("title", "") + "."]
+        else:
+            first, particle, last = name_parts(name)
+            people.append(f"{last.upper()}, {first}{' ' + particle if particle else ''}".strip(", "))
+    return people
+
+
+def found_url(fields: dict) -> str:
+    # Lido do campo cru: num endereço, % não é comentário do LaTeX.
+    found = re.search(r"https?://[^\s{}]+", fields.get("url") or fields.get("howpublished") or "")
+    return found.group(0) if found else ""
+
+
+def format_abnt(entry: dict) -> str:
+    """Referência pela NBR 6023:2018. O trecho em destaque (negrito) é dado por emphasis()."""
+    f = {k: strip_tex(v) for k, v in entry["fields"].items()}
     kind = entry["type"]
+    authors = "; ".join(abnt_names(entry["fields"].get("author", ""))) or f.get("organization", "").upper()
+    year = f.get("year") or "[s. d.]"
+    place = f.get("address") or f.get("location")  # cidade da editora
+    title = f.get("title", "")
+
+    def imprint(publisher: str | None) -> str:  # Local: Editora, ano. Sem local, a norma pede [S. l.]
+        if not publisher:
+            return f"{place}, {year}." if place else f"{year}."
+        return f"{place or '[S. l.]'}: {publisher}, {year}."
+
+    pages = f"p. {f['pages']}." if f.get("pages") else ""
+    parts = [authors + "." if authors else "", title + "."]
     if kind == "article":
-        venue = f.get("journal", "")
-        for field, label in (("volume", "v."), ("number", "n."), ("pages", "p.")):
-            if f.get(field):
-                venue += f", {label} {f[field]}"
-        parts.append(f"{venue}, {f.get('year', '')}.")
-    elif kind in ("inproceedings", "incollection", "conference"):
-        parts.append(f"In: {f.get('booktitle', '')}.")
-        place = ": ".join(x for x in (f.get("address"), f.get("publisher")) if x)
-        parts.append(f"{place + ', ' if place else ''}{f.get('year', '')}." + (f" p. {f['pages']}." if f.get("pages") else ""))
+        details = [f"{label} {f[field]}" for field, label in (("volume", "v."), ("number", "n."), ("pages", "p.")) if f.get(field)]
+        parts.append(", ".join([f.get("journal", ""), *details, year]) + ".")
+    elif kind in ("inproceedings", "conference"):
+        booktitle = f.get("booktitle", "")
+        event = re.sub(r"^(anais d[oae]s?|proceedings of( the)?)\s+", "", booktitle, flags=re.I)
+        where = f.get("location") or f.get("address")  # cidade do evento; address é a da editora
+        parts.append("In: " + ", ".join(x for x in (event.upper(), f.get("year"), where) if x) + ".")
+        parts.append(("Proceedings" if "proceedings" in booktitle.lower() else "Anais") + " [...].")
+        parts.append(imprint(f.get("publisher") or f.get("organization")))
+        parts.append(pages)
+    elif kind == "incollection":
+        editors = "; ".join(abnt_names(entry["fields"].get("editor", "")))
+        parts.append("In: " + (f"{editors} (org.). " if editors else "") + f.get("booktitle", "") + ".")
+        parts.append(imprint(f.get("publisher")))
+        parts.append(pages)
+    elif kind in ("phdthesis", "mastersthesis"):
+        degree = "Tese (Doutorado)" if kind == "phdthesis" else "Dissertação (Mestrado)"
+        parts.append(f"{year}.")
+        parts.append(", ".join(x for x in (f"{degree} – {f.get('school', '')}".strip(" –"), place, year) if x) + ".")
     else:
         if f.get("edition"):
-            parts.append(f"{f['edition']}. ed.")
-        place = ": ".join(x for x in (f.get("address"), f.get("publisher") or f.get("institution") or f.get("school")) if x)
-        parts.append(f"{place + ', ' if place else ''}{f.get('year', '')}.")
-    if f.get("url"):
-        parts.append(f"Disponível em: {f['url']}.")
+            parts.append(f["edition"].rstrip(". ed") + ". ed.")
+        publisher = next((f[k] for k in ("publisher", "institution", "school", "organization")
+                          if f.get(k) and f[k].upper() != authors), None)
+        parts.append(imprint(publisher))
+    if found_url(entry["fields"]):
+        parts.append(f"Disponível em: {found_url(entry['fields'])}.")
+    note = f.get("note", "")
+    accessed = f.get("urlaccessdate") or (re.sub(r"^acess\w*\s+em:?\s*", "", note, flags=re.I) if re.match(r"acess", note, re.I) else "")
+    if accessed:
+        parts.append(f"Acesso em: {accessed.rstrip('.')}.")
+    elif note:
+        parts.append(note.rstrip(".") + ".")
     text = " ".join(p for p in parts if p.strip(". ,"))
-    return re.sub(r"\s+", " ", text).replace("..", ".").strip()
+    return re.sub(r"(?<!\.)\.\.(?!\.)", ".", re.sub(r"\s+", " ", text)).strip()
+
+
+def emphasis(entry: dict, style: str) -> str:
+    """O trecho que vai em destaque: negrito na ABNT, itálico nos outros estilos."""
+    f = {k: strip_tex(v) for k, v in entry["fields"].items()}
+    kind = entry["type"]
+    if kind == "article":
+        return f.get("journal", "")
+    if kind in ("inproceedings", "conference"):
+        if style == "abnt":
+            return "Proceedings" if "proceedings" in f.get("booktitle", "").lower() else "Anais"
+        return f.get("booktitle", "")
+    if kind == "incollection":
+        return f.get("booktitle", "")
+    title = f.get("title", "")
+    return title.split(":")[0] if style == "abnt" else title
 
 
 def format_numbered(entry: dict) -> str:
@@ -332,7 +385,7 @@ def annotate(doc: dict, bib: dict) -> dict:
 
     formatter = {"abnt": format_abnt, "numeric": format_numbered, "numeric-sorted": format_numbered}.get(style, format_entry)
     doc["bibliography"] = [
-        {"key": k, "text": formatter(bib[k]), **({"number": numbers[k]} if style.startswith("numeric") else {})}
+        {"key": k, "text": formatter(bib[k]), "emphasis": emphasis(bib[k], style), **({"number": numbers[k]} if style.startswith("numeric") else {})}
         for k in entries
     ]
     english = doc.get("language") == "en" and not re.search(r"brazil|portug", doc.get("preamble", ""))

@@ -84,8 +84,9 @@ def test_abnt_citations_and_references():
     assert cite_labels(doc) == ["Alfa e Costa (2019)", "(ZETA, 2020)"]
     assert [e["text"] for e in doc["bibliography"]] == [
         "ALFA, Bruno; COSTA, Carla da. A. Revista, v. 3, p. 1–9, 2019.",
-        "ZETA, Ana. Z. P, 2020.",
+        "ZETA, Ana. Z. [S. l.]: P, 2020.",
     ]
+    assert [e["emphasis"] for e in doc["bibliography"]] == ["Revista", "Z"]
     assert doc["references_title"] == "Referências"
 
 
