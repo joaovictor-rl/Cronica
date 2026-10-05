@@ -249,6 +249,79 @@ a.profile-name:hover { color: var(--link); }
 .paper .figure-source { font-size: 13px; text-align: center; text-indent: 0; margin-top: 4px; }
 .footnote-mark { color: var(--pink); cursor: help; }
 
+/* ---------- o editor com a cara do PDF de cada formato ---------- */
+
+/* Folhas A4 separadas. As margens vêm do formato (editor.js, paginate); 18px é o espaço entre as folhas. */
+.paper.paginated {
+  width: 21cm; max-width: none; position: relative; border: 0; box-shadow: none;
+  background: repeating-linear-gradient(#fff 0, #fff 29.7cm, transparent 29.7cm, transparent calc(29.7cm + 18px));
+}
+span.page-gap { display: block; }
+.paper.paginated [contenteditable=true]:hover, .paper.paginated [contenteditable=true]:focus { background: transparent; }
+.page-gap { pointer-events: none; user-select: none; }
+
+.paper.fmt-abnt, .paper.fmt-sbc, .paper.fmt-ieee, .paper.fmt-latex { font-family: "Times New Roman", Times, "Liberation Serif", serif; }
+.paper[class*="fmt-"] h2, .paper[class*="fmt-"] h3, .paper[class*="fmt-"] h4, .paper[class*="fmt-"] h5,
+.paper[class*="fmt-"] .paper-title, .paper[class*="fmt-"] .paper-table { font-family: inherit; }
+.paper[class*="fmt-"] .number { color: inherit; }
+.paper[class*="fmt-"] p { hyphens: manual; }
+.paper[class*="fmt-"] .paper-address { color: inherit; }
+
+/* ABNT (NBR 14724): fonte 12, espaço 1,5, recuo de 1,25 cm, títulos do tamanho do texto */
+.paper.fmt-abnt { font-size: 12pt; line-height: 1.5; }
+.paper.fmt-abnt p { margin: 0; }
+.paper.fmt-abnt .ed-paragraph p { text-indent: 1.25cm; }
+.paper.fmt-abnt .paper-title { font-size: 12pt; font-weight: bold; margin-bottom: 8pt; }
+.paper.fmt-abnt .paper-address { font-size: 10pt; margin-bottom: 14pt; }
+.paper.fmt-abnt h2, .paper.fmt-abnt h3, .paper.fmt-abnt h4, .paper.fmt-abnt h5 { font-size: 12pt; margin: 18pt 0; }
+.paper.fmt-abnt h2 { text-transform: uppercase; }
+.paper.fmt-abnt h3 { text-transform: uppercase; font-weight: normal; }
+.paper.fmt-abnt h5 { font-weight: normal; font-style: italic; }
+.paper.fmt-abnt .paper-abstract { margin: 0 0 6pt; font-size: 12pt; line-height: 1.2; }
+.paper.fmt-abnt .paper-abstract p { margin-bottom: 6pt; }
+.paper.fmt-abnt .abstract-label { text-align: center; text-transform: uppercase; margin: 6pt 0; }
+.paper.fmt-abnt .caption, .paper.fmt-abnt .figure-source { font-size: 10pt; line-height: 1.2; margin: 6pt 0; }
+.paper.fmt-abnt .caption b { font-weight: normal; }
+.paper.fmt-abnt .figure-source { text-align: left; }
+.paper.fmt-abnt .paper-table td { border: 0; }
+.paper.fmt-abnt .paper-table tr:first-child td { border-top: 1px solid #222; border-bottom: 1px solid #222; }
+.paper.fmt-abnt .paper-table tr:last-child td { border-bottom: 1px solid #222; }
+
+/* SBC (sbc-template.sty): fonte 12, espaço simples, 6pt entre parágrafos, resumos em itálico */
+.paper.fmt-sbc { font-size: 12pt; line-height: 1.17; }
+.paper.fmt-sbc p { margin: 0 0 6pt; }
+.paper.fmt-sbc .ed-paragraph p { text-indent: 1.27cm; }
+.paper.fmt-sbc .paper-title { font-size: 16pt; font-weight: bold; }
+.paper.fmt-sbc .paper-authors { font-weight: bold; }
+.paper.fmt-sbc h2 { font-size: 13pt; margin: 12pt 0 6pt; }
+.paper.fmt-sbc h3, .paper.fmt-sbc h4, .paper.fmt-sbc h5 { font-size: 12pt; margin: 12pt 0 6pt; }
+.paper.fmt-sbc .paper-abstract { margin: 6pt 0.8cm; font-size: 12pt; font-style: italic; }
+.paper.fmt-sbc .abstract-label { float: left; margin: 0 0.3em 0 0; font-style: italic; }
+.paper.fmt-sbc .abstract-label::after { content: "."; }
+.paper.fmt-sbc .caption { font: bold 10pt/1.2 Helvetica, Arial, sans-serif; margin: 6pt 0.8cm; }
+
+/* IEEE: fonte 10, seções centralizadas em maiúsculas (no PDF o texto fica em duas colunas) */
+.paper.fmt-ieee { font-size: 10pt; line-height: 1.2; }
+.paper.fmt-ieee p { margin: 0; }
+.paper.fmt-ieee .ed-paragraph p { text-indent: 0.35cm; }
+.paper.fmt-ieee .paper-title { font-size: 24pt; font-weight: normal; }
+.paper.fmt-ieee .paper-authors, .paper.fmt-ieee .paper-address { font-size: 11pt; }
+.paper.fmt-ieee h2 { font-size: 10pt; font-weight: normal; text-align: center; text-transform: uppercase; margin: 10pt 0 5pt; }
+.paper.fmt-ieee h3, .paper.fmt-ieee h4, .paper.fmt-ieee h5 { font-size: 10pt; font-weight: normal; font-style: italic; margin: 6pt 0 3pt; }
+.paper.fmt-ieee .paper-abstract { margin: 0 0 6pt; font-size: 9pt; font-weight: bold; }
+.paper.fmt-ieee .abstract-label { float: left; margin: 0 0.2em 0 0; font-style: italic; }
+.paper.fmt-ieee .abstract-label::after { content: "—"; font-style: normal; }
+.paper.fmt-ieee .caption, .paper.fmt-ieee .figure-source { font-size: 8pt; }
+.paper.fmt-ieee .caption b { font-weight: normal; }
+
+/* Outros artigos: as medidas padrão do LaTeX */
+.paper.fmt-latex p { margin: 0; }
+.paper.fmt-latex .ed-paragraph p { text-indent: 1.5em; }
+.paper.fmt-latex .paper-title { font-size: 17pt; font-weight: normal; }
+.paper.fmt-latex .paper-abstract { margin: 6pt 1cm 10pt; font-size: 0.9em; }
+.paper.fmt-latex .abstract-label { text-align: center; }
+.paper.fmt-latex .caption b { font-weight: normal; }
+
 /* ---------- editor ---------- */
 
 .edit-bar {
@@ -290,6 +363,7 @@ a.profile-name:hover { color: var(--link); }
 }
 .chip-comment, .chip-cmd, .chip-label, .chip-env, .chip-group { background: #f1f1f1; color: #777; border-color: #ddd; }
 .chip-sup { vertical-align: super; font-size: 0.6em; }
+.paper .chip { text-indent: 0; }
 .chip-quiet { background: transparent; border-color: transparent; color: #bbb; padding: 0 2px; }
 textarea.code { min-height: 70vh; font: 12.5px/1.55 var(--mono); }
 

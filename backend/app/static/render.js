@@ -66,11 +66,11 @@ export function figureHtml(block) {
   `;
 }
 
-export function tableHtml(block, captionHtml = null) {
+export function tableHtml(block, captionHtml = null, label = `Tabela ${block.number}.`) {
   const caption = captionHtml ?? (block.caption ? spansHtml(block.caption) : "");
   const aligns = (block.columns || []).map((c) => c.align || "left");
   return `
-    ${caption ? `<p class="caption"><b>Tabela ${esc(block.number)}.</b> ${caption}</p>` : ""}
+    ${caption ? `<p class="caption"><b>${esc(label)}</b> ${caption}</p>` : ""}
     <div class="table-scroll">
       <table class="paper-table">
         ${block.rows.map((row) => `<tr>${row.map((cell, i) => `<td style="text-align:${aligns[i] || "left"}">${spansHtml(cell)}</td>`).join("")}</tr>`).join("")}

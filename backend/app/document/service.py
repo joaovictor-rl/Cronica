@@ -3,16 +3,17 @@ import re
 import threading
 import unicodedata
 from collections import OrderedDict
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
 
+from reportlab.lib.units import cm
 from sqlalchemy.orm import Session
 
 from app import versioning
 from app.document.blocks import find_main, parse_document
 from app.document.images import displayable, resolve_image
 from app.document.inline import plain_text
-from app.document.pdf import build_pdf
+from app.document.pdf import build_pdf, layout_for
 from app.document.references import annotate, load_bibliography
 from app.ingest import decode_text
 from app.models import Blob, Version
@@ -91,6 +92,7 @@ def document_from_files(files: dict[str, bytes]) -> tuple[dict, Callable]:
     bibs = {path: files[path] for path in files if path.endswith(".bib")}
     annotate(doc, load_bibliography(doc, main, bibs))
     doc["main"] = main
+    page_layout(doc)
 
     def image(path):
         real = resolve_image(path, main, files)
@@ -115,7 +117,15 @@ def load_version(db: Session, version: Version) -> LoadedVersion:
     bibs = {path: read(path) for path in entries if path.endswith(".bib")}
     annotate(doc, load_bibliography(doc, main, bibs))
     doc["main"] = main
+    page_layout(doc)
     return LoadedVersion(version, entries, main, doc, db)
+
+
+def page_layout(doc: dict) -> None:
+    """O formato e as margens da página, para o editor ficar com a cara do PDF."""
+    layout = layout_for(doc)
+    doc["format"] = layout.kind
+    doc["margins_cm"] = [round(side / cm, 2) for side in (layout.top, layout.right, layout.bottom, layout.left)]
 
 
 def title_of(source: str) -> str | None:

@@ -45,7 +45,7 @@ export function readSpans(element) {
         spans.push({ t: child.nodeValue, ...fmt });
         continue;
       }
-      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      if (child.nodeType !== Node.ELEMENT_NODE || child.classList.contains("page-gap")) continue;
       if (child.dataset.span) {
         const span = JSON.parse(child.dataset.span);
         spans.push({ ...span, ...fmt });
@@ -97,6 +97,70 @@ function placeCaret(element, where) {
   selection.addRange(range);
 }
 
+const PAGE_GAP = 18; // o espaço entre uma folha e outra; o mesmo do style.css
+
+// O editor imita o PDF de cada formato (abnt, sbc, ieee ou latex; veja layout_for em pdf.py).
+function roman(n) {
+  return [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]].reduce((out, [value, letters]) => {
+    while (n >= value) { out += letters; n -= value; }
+    return out;
+  }, "");
+}
+
+function sectionNumber(format, number, level) {
+  if (format === "sbc") return `${number}.`;
+  if (format === "ieee") {
+    const last = Number(number.split(".").pop());
+    return level === 1 ? `${roman(last)}.` : level === 2 ? `${String.fromCharCode(64 + last)}.` : `${last})`;
+  }
+  return number; // ABNT e LaTeX: "1 Introdução", sem ponto
+}
+
+function captionLabel(doc, kind, number) {
+  const english = doc.language === "en" && !/brazil|portug/.test(doc.preamble || "");
+  const word = kind === "figure" ? (english ? "Figure" : "Figura") : (english ? "Table" : "Tabela");
+  if (doc.format === "abnt") return `${word} ${number} –`;
+  if (doc.format === "ieee") return kind === "figure" ? `Fig. ${number}.` : `TABLE ${roman(Number(number))}`;
+  if (doc.format === "sbc") return `${word} ${number}.`;
+  return `${word} ${number}:`;
+}
+
+// Onde quebrar um parágrafo que passa do fim da folha: no começo da primeira linha que não cabe.
+// Devolve "whole" se nem a primeira linha cabe, ou null se não achar.
+function lineBreakAt(text, limit) {
+  const all = document.createRange();
+  all.selectNodeContents(text);
+  const line = [...all.getClientRects()].find((r) => r.height && r.bottom > limit + 0.5);
+  if (!line) return null;
+  const box = text.getBoundingClientRect();
+  if (line.top <= box.top + 1) return "whole";
+  // Procura o primeiro caractere (ou citação) que está nessa linha.
+  const range = document.createRange();
+  const walker = document.createTreeWalker(text, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.dataset.span && node.getBoundingClientRect().top >= line.top - 1) {
+        range.setStartBefore(node);
+        range.collapse(true);
+        return range;
+      }
+      continue;
+    }
+    if (node.parentElement.closest("[data-span]")) continue; // nunca dentro de uma citação
+    for (let i = 0; i < node.length; i++) {
+      if (!node.data[i].trim()) continue;
+      range.setStart(node, i);
+      range.setEnd(node, i + 1);
+      const rect = range.getClientRects()[0];
+      if (rect && rect.top >= line.top - 1) {
+        range.collapse(true);
+        return range;
+      }
+    }
+  }
+  return null;
+}
+
 function headingNumbers(blocks) {
   const counters = [0, 0, 0, 0];
   const numbers = {};
@@ -122,7 +186,10 @@ export class Editor {
     this.loadImages = loadImages;
     this.current = null;
     this.root.addEventListener("keydown", (e) => this.keydown(e));
-    this.root.addEventListener("input", () => this.onChange());
+    this.root.addEventListener("input", () => { this.schedulePages(250); this.onChange(); });
+    // Imagens que terminam de carregar mudam a altura do texto, e com ela as páginas.
+    this.root.addEventListener("load", () => this.schedulePages(), true);
+    window.addEventListener("resize", () => this.schedulePages());
     this.root.addEventListener("paste", (e) => this.paste(e));
     // Guarda onde o cursor estava no texto, para o botão "Citar" inserir a citação ali mesmo.
     this.lastRange = null;
@@ -153,7 +220,7 @@ export class Editor {
       : "";
 
     this.root.innerHTML = `
-      <article class="paper editing">
+      <article class="paper editing fmt-${esc(this.doc.format || "latex")}">
         ${field("title", "paper-title", "Título do artigo")}
         ${field("author", "paper-authors", "Autores")}
         ${field("address", "paper-address", "Instituição")}
@@ -161,10 +228,84 @@ export class Editor {
       </article>
     `;
     this.loadImages(this.root);
+    this.paginate();
     if (focus) {
       const target = this.root.querySelector(`[data-path="${focus.path}"]`);
       if (target) placeCaret(target, focus.where || "start");
     }
+  }
+
+  // ---------- páginas ----------
+
+  // Enquanto a pessoa digita, as páginas são refeitas só quando ela para um instante.
+  schedulePages(wait = 0) {
+    clearTimeout(this.pending);
+    this.pending = setTimeout(() => this.paginate(), wait);
+  }
+
+  // Mostra o artigo em folhas A4, com as margens do formato. Entre uma folha e outra entra um
+  // espaçador (.page-gap) que não é texto: o parágrafo que não cabe é quebrado entre as linhas,
+  // e os outros blocos (títulos, figuras, tabelas) passam inteiros para a folha seguinte.
+  paginate() {
+    const paper = this.root.querySelector(".paper");
+    if (!paper) return;
+    for (const old of paper.querySelectorAll(".page-gap")) {
+      const parent = old.parentNode;
+      old.remove();
+      parent.normalize();
+    }
+    const wide = window.matchMedia("(min-width: 860px)").matches;
+    paper.classList.toggle("paginated", wide);
+    if (!wide) {
+      paper.style.padding = paper.style.minHeight = "";
+      return;
+    }
+    const [top, right, bottom, left] = this.doc.margins_cm || [2.5, 2.5, 2.5, 2.5];
+    paper.style.padding = `${top}cm ${right}cm ${bottom}cm ${left}cm`;
+    const CM = 96 / 2.54;
+    const sheet = 29.7 * CM;
+    const step = sheet + PAGE_GAP;
+    const bodyTop = (n) => n * step + top * CM;
+    const bodyBottom = (n) => n * step + sheet - bottom * CM;
+    // Medido de novo a cada vez: ao inserir uma divisão, o navegador pode rolar a tela.
+    const origin = () => paper.getBoundingClientRect().top;
+    const y = (el) => el.getBoundingClientRect().top - origin();
+    const end = (el) => el.getBoundingClientRect().bottom - origin();
+
+    let page = 0;
+    const breakBefore = (target, inside = null) => {
+      const gap = document.createElement(inside ? "span" : "div");
+      gap.className = "page-gap";
+      gap.contentEditable = "false";
+      if (inside) inside.insertNode(gap);
+      else target.before(gap);
+      page += 1;
+      gap.style.height = `${Math.max(0, bodyTop(page) - y(gap))}px`;
+    };
+
+    for (const block of [...paper.children]) {
+      if (!block.offsetHeight || end(block) <= bodyBottom(page)) continue;
+      const texts = block.matches(".ed-paragraph, .ed-abstract") ? [...block.querySelectorAll("p[contenteditable]")] : [];
+      if (!texts.length) {
+        if (y(block) > bodyTop(page) + 1) breakBefore(block);
+        while (end(block) > bodyBottom(page)) page += 1; // maior que uma folha inteira: atravessa a divisão
+        continue;
+      }
+      for (const text of texts) {
+        while (end(text) > bodyBottom(page)) {
+          const at = lineBreakAt(text, origin() + bodyBottom(page));
+          if (at === "whole") {
+            if (y(text) <= bodyTop(page) + 1) break;
+            breakBefore(text === texts[0] ? block : text);
+          } else if (at) {
+            breakBefore(null, at);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    paper.style.minHeight = `${(page + 1) * step - PAGE_GAP}px`;
   }
 
   blockHtml(block, index, number) {
@@ -175,7 +316,8 @@ export class Editor {
         return wrap(`<p contenteditable="true" data-path="${path}" data-placeholder="Escreva aqui…">${editableHtml(block.spans)}</p>`);
       case "heading": {
         const level = Math.min((block.level || 1) + 1, 5);
-        return wrap(`<h${level}>${number ? `<span class="number" contenteditable="false">${number}.</span> ` : ""}<span contenteditable="true" data-path="${path}" data-placeholder="Título da seção">${editableHtml(block.spans)}</span></h${level}>`);
+        const label = number ? sectionNumber(this.doc.format, number, block.level) : "";
+        return wrap(`<h${level}>${label ? `<span class="number" contenteditable="false">${label}</span> ` : ""}<span contenteditable="true" data-path="${path}" data-placeholder="Título da seção">${editableHtml(block.spans)}</span></h${level}>`);
       }
       case "abstract":
         return wrap(`<div class="paper-abstract"><p class="abstract-label">${abstractLabel(this.doc, block)}</p>
@@ -188,11 +330,11 @@ export class Editor {
       case "table": {
         const editable = block.cap ? `<span contenteditable="true" data-path="${path}.cap" data-placeholder="Legenda">${editableHtml(block.caption)}</span>` : null;
         if (block.type === "table") {
-          return wrap(`<div class="paper-figure">${tableHtml(block, editable)}<p class="ed-hint">Para mudar as células da tabela, use o modo código LaTeX.</p></div>`);
+          return wrap(`<div class="paper-figure">${tableHtml(block, editable, captionLabel(this.doc, "table", block.number || ""))}<p class="ed-hint">Para mudar as células da tabela, use o modo código LaTeX.</p></div>`);
         }
         const html = figureHtml({ ...block, caption: null, source: null });
-        const caption = block.caption ? `<p class="caption"><b>Figura ${esc(block.number || "")}.</b> ${editable ?? ""}</p>` : "";
-        const source = `<p class="figure-source"><b>Fonte:</b> <span contenteditable="true" data-path="${path}.source"
+        const caption = block.caption ? `<p class="caption"><b>${esc(captionLabel(this.doc, "figure", block.number || ""))}</b> ${editable ?? ""}</p>` : "";
+        const source = `<p class="figure-source"><b>${captionLabel(this.doc, "figure", "").startsWith("Figure") ? "Source" : "Fonte"}:</b> <span contenteditable="true" data-path="${path}.source"
           data-placeholder="de onde veio a imagem, por exemplo: elaborado pelos autores (2026)">${editableHtml(block.source || [])}</span></p>`;
         return wrap(`<div class="paper-figure">${this.abnt ? caption + html : html + caption}${source}</div>`);
       }
