@@ -1,7 +1,7 @@
 """Demonstração descartável.
 
 Cada visitante que clica em "Entrar na demonstração" ganha uma cópia só sua: duas contas (a dele e a de
-uma colega), o artigo real em quatro versões, uma organização e um convite esperando resposta. Nada do que
+uma colega), o artigo de exemplo em quatro versões, uma organização e um convite esperando resposta. Nada do que
 ele fizer aparece para outra pessoa, e tudo some quando a cópia expira ou o servidor reinicia.
 
 Como os arquivos são guardados por conteúdo, as figuras do artigo ficam uma vez só no banco, por mais
@@ -28,12 +28,12 @@ from app.models import (
     now,
 )
 
-PROJECT_DIR = Path(__file__).resolve().parents[2] / "examples" / "meu-sus-digital"
+PROJECT_DIR = Path(__file__).resolve().parents[2] / "examples" / "artigo-cursor"
 SANDBOX_HOURS = 3
 MAX_SANDBOXES = 300
 LEGACY_EMAILS = ("demo@cronica.dev", "colega@cronica.dev")  # contas fixas de versões anteriores
-GROUP_NAME = "Grupo de IHC — UFPA (demonstração)"
-DEMO_TITLE = "Usabilidade e Acessibilidade Digital para Idosos: Uma Avaliação do Aplicativo “Meu SUS Digital”"
+GROUP_NAME = "Projeto Cursor — UFPA (demonstração)"
+DEMO_TITLE = "Cursor: Uma Ferramenta para Acompanhar a Trajetória Acadêmica a partir do Histórico do SIGAA"
 ENDING = "\n\n\\bibliographystyle{sbc}\n\\bibliography{sbc-template}\n\n\\end{document}\n"
 
 
@@ -41,33 +41,18 @@ class DemoFull(Exception):
     """Muitas demonstrações abertas ao mesmo tempo."""
 
 
-# Correções da última versão: erros de digitação, legendas repetidas e rótulos de figura duplicados.
+# Correções da última versão: erros de digitação, legenda repetida e rótulo de figura duplicado.
 REVISION = [
     ("\\maketitle\n\n9pp\n\\begin{abstractp}", "\\maketitle\n\n\\begin{abstract}"),
-    ("informações informações", "informações"),
-    ("a explicação a cerca das", "a explicação acerca das"),
-    ("com o sistema.No contexto", "com o sistema. No contexto"),
-    ("quantitativa).Dessa forma", "quantitativa). Dessa forma"),
-    ("Meu SUS Digital,além", "Meu SUS Digital, além"),
-    ("governamental,o Meu", "governamental, o Meu"),
-    ("{barbosa2010ihc}.Por ser", "{barbosa2010ihc}. Por ser"),
-    ("tarefa,a participante \\textit{}{P01}", "tarefa, a participante \\textit{P01}"),
-    ("sobre ICM", "sobre IMC"),
-    ("os usuário direcionassem", "os usuários direcionassem"),
-    ("podendo se um fator", "podendo ser um fator"),
-    ("das página de menu", "das páginas de menu"),
-    ("inserção dos dados . Por fim", "inserção dos dados. Por fim"),
-    ("avaliação heurística .", "avaliação heurística."),
-    ("rótulo em negrito) , não há", "rótulo em negrito), não há"),
-    ("Fluxo para exportar comprovante de vacinação.pdf}\n  \\caption{Redesign da tela de exportar comprovante de vacinação}\n  \\label{fig:signos-dinamicos}",
-     "Fluxo para exportar comprovante de vacinação.pdf}\n  \\caption{Redesign da tela de exportar comprovante de vacinação}\n  \\label{fig:redesign-vacina}"),
-    ("Fluxo para cadastrar IMC.pdf}\n  \\caption{Redesign da tela de exportar comprovante de vacinação}\n  \\label{fig:signos-dinamicos}",
-     "Fluxo para cadastrar IMC.pdf}\n  \\caption{Redesign das telas de registro do IMC}\n  \\label{fig:redesign-imc}"),
-    ("Fluxo para pesquisar no menu.pdf}\n  \\caption{Redesign da tela de exportar comprovante de vacinação}\n  \\label{fig:signos-dinamicos}",
-     "Fluxo para pesquisar no menu.pdf}\n  \\caption{Redesign do menu com barra de pesquisa}\n  \\label{fig:redesign-menu}"),
-    ("como visto na imagem 7b", "como visto na Figura~\\ref{fig:redesign-imc}b"),
-    ("demonstrada na imagem 7d", "demonstrada na Figura~\\ref{fig:redesign-imc}d"),
-    ("mostrado na imagem 7e", "mostrado na Figura~\\ref{fig:redesign-imc}e"),
+    ("dados dados", "dados"),
+    ("afim de que", "a fim de que"),
+    ("o CRG ,que aparece", "o CRG, que aparece"),
+    ("os semestre intensivos", "os semestres intensivos"),
+    ("com o historico do aluno", "com o histórico do aluno"),
+    ("do aluno.Em seguida", "do aluno. Em seguida"),
+    ("cr-semestres.png}\n  \\caption{Tela inicial do Cursor}\n  \\label{fig:tela}",
+     "cr-semestres.png}\n  \\caption{Evolução do CR por período (histórico fictício)}\n  \\label{fig:grafico-cr}"),
+    ("como mostra a imagem 3", "como mostra a Figura~\\ref{fig:grafico-cr}"),
 ]
 
 
@@ -80,7 +65,7 @@ def draft(files: dict[str, bytes], source: str, marker: str) -> dict[str, bytes]
     cut = source.rfind("\n", 0, source.index(marker))
     text = source[:cut].rstrip() + ENDING
     used = {path.strip() for path in graphics(text)}
-    kept = {p: c for p, c in files.items() if not p.startswith("imagens/") and p != "table.jpg"}
+    kept = {p: c for p, c in files.items() if not p.startswith("imagens/")}
     kept.update({p: c for p, c in files.items() if p in used})
     kept["main.tex"] = text.encode()
     return kept
@@ -101,18 +86,18 @@ def demo_steps() -> tuple:
     source = files["main.tex"].decode("utf-8")
     return (
         (draft(files, source, "\\section{Resultados}"), "Introdução, fundamentação teórica e metodologia", 12, "voce"),
-        (draft(files, source, "\\subsection{Aplicação do Método de Inspeção Semiótica"),
-         "Resultados da avaliação heurística e do teste de usabilidade", 8, "colega"),
-        (files, "Inspeção semiótica, redesign e considerações finais (versão enviada)", 4, "voce"),
+        (draft(files, source, "\\subsection{Simulador do próximo semestre}"),
+         "Resultados: interface e gráfico do CR", 8, "colega"),
+        (files, "Simulador, testes e considerações finais (versão entregue)", 4, "voce"),
         ({**files, "main.tex": revised(source).encode()},
-         "Revisão: erros de digitação, legendas repetidas e rótulos das figuras", 1, "voce"),
+         "Revisão: erros de digitação, legenda repetida e rótulo da figura", 1, "voce"),
     )
 
 
 def demo_user(db, sandbox: str, slug: str, name: str, expires, **profile) -> User:
     user = User(
         name=name, email=f"{slug}-{sandbox}@demo.cronica", password_hash="!", sandbox=sandbox, expires_at=expires,
-        institution="Universidade Federal do Pará (UFPA)", area="Interação Humano-Computador", **profile,
+        institution="Universidade Federal do Pará (UFPA)", area="Engenharia de Software", **profile,
     )
     db.add(user)
     return user
@@ -128,16 +113,16 @@ def create_sandbox(db) -> User:
     expires = now() + timedelta(hours=SANDBOX_HOURS)
     user = demo_user(
         db, sandbox, "demo", "Conta de demonstração", expires, city="Belém, PA",
-        status="Escrevendo sobre acessibilidade digital para idosos ✍",
-        interests="Interação Humano-Computador\nAcessibilidade\nUsabilidade\nSaúde digital",
-        bio=("Conta de exemplo do Crônica. O artigo dela foi escrito em grupo na disciplina de "
-             "Interação Humano-Computador e importado do Overleaf. Mude o que quiser: esta cópia é só sua."),
+        status="Escrevendo o artigo do Cursor ✍",
+        interests="Engenharia de Software\nVisualização de dados\nPython\nEducação",
+        bio=("Conta de exemplo do Crônica. O artigo dela descreve o Cursor, um projeto do autor do Crônica, "
+             "e foi importado do Overleaf. Mude o que quiser: esta cópia é só sua."),
     )
     colleague = demo_user(
         db, sandbox, "colega", "Colega de grupo", expires, city="Ananindeua, PA", theme="verde", pattern="bolinhas",
-        status="Revisando os resultados do teste de usabilidade",
-        interests="Avaliação heurística\nTeste de usabilidade",
-        bio="Segunda conta de exemplo: escreveu os resultados do artigo e convidou a demonstração para um roteiro.",
+        status="Revisando os resultados do artigo",
+        interests="Testes automatizados\nInterfaces web",
+        bio="Segunda conta de exemplo: escreveu os resultados do artigo e convidou a demonstração para um roteiro de testes.",
     )
     db.commit()
 
@@ -155,13 +140,13 @@ def create_sandbox(db) -> User:
 def seed_group(db, user: User, colleague: User, article: Article) -> None:
     """Uma organização com as duas contas e um convite esperando resposta, para mostrar a colaboração."""
     group = Organization(name=GROUP_NAME, owner_id=user.id, description=(
-        "Grupo da disciplina de Interação Humano-Computador. Quem entra no grupo lê e edita os artigos dele."))
+        "Grupo de exemplo que escreve sobre o Cursor. Quem entra no grupo lê e edita os artigos dele."))
     db.add(group)
     db.flush()
     db.add_all([OrgMember(org_id=group.id, user_id=user.id), OrgMember(org_id=group.id, user_id=colleague.id)])
     article.org_id = group.id
 
-    script = versioning.create_article(db, "Roteiro do teste de usabilidade com idosos", colleague)
+    script = versioning.create_article(db, "Roteiro de testes do simulador", colleague)
     versioning.commit(db, script, TEMPLATES["abnt"].build(script.title, colleague.name), "Artigo criado a partir do modelo Artigo ABNT",
                       None, colleague, created_at=now() - timedelta(days=2))
     db.add(Invite(kind="artigo", target_id=script.id, from_id=colleague.id, to_id=user.id,

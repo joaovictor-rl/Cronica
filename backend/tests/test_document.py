@@ -67,8 +67,7 @@ def test_regenerating_every_block_keeps_the_text():
         if block["type"] in ("paragraph", "heading", "list", "abstract"):
             del block["src"]
     changes = diff_tex(REAL_ARTICLE, serialize_document(doc))["changes"]
-    # A única diferença é um \textit{} vazio que existe no original.
-    assert len(changes) == 1 and "\\textit{}" in changes[0]["old"]
+    assert changes == []
 
 
 def test_structure_of_small_document():
@@ -123,8 +122,8 @@ def test_real_article_references_match_sbc_style():
     doc = parse_document(REAL_ARTICLE)
     annotate(doc, load_bibliography(doc, "main.tex", files))
     labels = {s["label"] for b in doc["blocks"] for s in b.get("spans", []) if s.get("kind") == "cite"}
-    assert "[de Abreu Cybis et al. 2015]" in labels and "[Barbosa et al. 2021]" in labels
-    assert [b["number"] for b in doc["blocks"] if b["type"] == "figure"] == [str(n) for n in range(1, 9)]
+    assert "[McKinney 2010]" in labels and "[Universidade Federal do Pará 2013]" in labels
+    assert [b["number"] for b in doc["blocks"] if b["type"] == "figure"] == ["1", "2", "3"]
 
 
 def test_cite_label_for_organizations_and_particles():

@@ -13,7 +13,7 @@ def start(client):
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_demo_has_the_real_article_in_four_versions(client):
+def test_demo_has_the_example_article_in_four_versions(client):
     demo = start(client)
     me = client.get("/auth/me", headers=demo).json()
     assert me["is_demo"] and me["expires_at"]
